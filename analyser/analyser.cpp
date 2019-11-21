@@ -3,6 +3,10 @@
 #include <climits>
 
 namespace miniplc0 {
+	bool mismatchType(std::optional<Token> token, TokenType type) {
+		return (!token.has_value() || token.value().GetType() != type);
+	}
+
 	std::pair<std::vector<Instruction>, std::optional<CompilationError>> Analyser::Analyse() {
 		auto err = analyseProgram();
 		if (err.has_value())
@@ -17,7 +21,8 @@ namespace miniplc0 {
 
 		// 'begin'
 		auto bg = nextToken();
-		if (!bg.has_value() || bg.value().GetType() != TokenType::BEGIN)
+		// if (!bg.has_value() || bg.value().GetType() != TokenType::BEGIN)
+		if (mismatchType(bg, TokenType::BEGIN))
 			return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrNoBegin);
 
 		// <主过程>
@@ -27,7 +32,8 @@ namespace miniplc0 {
 
 		// 'end'
 		auto ed = nextToken();
-		if (!ed.has_value() || ed.value().GetType() != TokenType::END)
+		// if (!ed.has_value() || ed.value().GetType() != TokenType::END)
+		if (mismatchType(ed, TokenType::END))
 			return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrNoEnd);
 		return {};
 	}
@@ -38,11 +44,19 @@ namespace miniplc0 {
 		// 完全可以参照 <程序> 编写
 
 		// <常量声明>
+        auto err = analyseConstantDeclaration();
+        if (err.has_value())
+            return err;
 
 		// <变量声明>
+        err = analyseVariableDeclaration();
+        if (err.has_value())
+            return err;
 
 		// <语句序列>
-		return {};
+        err = analyseStatementSequence();
+        if (err.has_value())
+            return err;
 	}
 
 	// <常量声明> ::= {<常量声明语句>}
@@ -64,7 +78,7 @@ namespace miniplc0 {
 
 			// <常量声明语句>
 			next = nextToken();
-			if (!next.has_value() || next.value().GetType() != TokenType::IDENTIFIER)
+			if (mismatchType(next, TokenType::IDENTIFIER))
 				return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrNeedIdentifier);
 			if (isDeclared(next.value().GetValueString()))
 				return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrDuplicateDeclaration);
@@ -72,7 +86,7 @@ namespace miniplc0 {
 
 			// '='
 			next = nextToken();
-			if (!next.has_value() || next.value().GetType() != TokenType::EQUAL_SIGN)
+			if (mismatchType(next, TokenType::EQUAL_SIGN))
 				return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrConstantNeedValue);
 
 			// <常表达式>
@@ -83,33 +97,61 @@ namespace miniplc0 {
 
 			// ';'
 			next = nextToken();
-			if (!next.has_value() || next.value().GetType() != TokenType::SEMICOLON)
+			if (mismatchType(next, TokenType::SEMICOLON))
 				return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrNoSemicolon);
 			// 生成一次 LIT 指令加载常量
 			_instructions.emplace_back(Operation::LIT, val);
 		}
-		return {};
 	}
 
 	// <变量声明> ::= {<变量声明语句>}
 	// <变量声明语句> ::= 'var'<标识符>['='<表达式>]';'
 	// 需要补全
 	std::optional<CompilationError> Analyser::analyseVariableDeclaration() {
-		// 变量声明语句可能有一个或者多个
+		// 变量声明语句可能有 0 个或者多个
+		while (true) {
+            // 预读
+            auto next = nextToken();
+            if (!next.has_value())
+                return {};
 
-		// 预读？
+            // 如果是 var 那么说明应该推导 <常量声明> 否则直接返回
+            if (next.value().GetType() != TokenType::VAR) {
+                unreadToken();
+                return {};
+            }
 
-		// 'var'
+            // <标识符>
+            next = nextToken();
+            if (mismatchType(next, TokenType::IDENTIFIER))
+                return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrNeedIdentifier);
+            if (isDeclared(next.value().GetValueString()))
+                return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrDuplicateDeclaration);
 
-		// <标识符>
+            // 变量可能没有初始化，仍然需要一次预读
+            Token varId = next.value();
+            next = nextToken();
+            if (!next.has_value())
+                return {};
 
-		// 变量可能没有初始化，仍然需要一次预读
+            // 如果不是 = 那么说明变量未初始化
+            if (next.value().GetType() != TokenType::EQUAL_SIGN) {
+                unreadToken();
+                addUninitializedVariable(varId);
+                _instructions.emplace_back(Operation::LIT, 0);
+            } else {
+                addVariable(varId);
+                auto err = analyseExpression();
+                if (err.has_value())
+                    return err;
+                // 初始化变量的值在解析表达式后压栈
+            }
 
-		// '='
-
-		// '<表达式>'
-
-		// ';'
+            // ';'
+            next = nextToken();
+            if (mismatchType(next, TokenType::SEMICOLON))
+                return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrNoSemicolon);
+        }
 		return {};
 	}
 
