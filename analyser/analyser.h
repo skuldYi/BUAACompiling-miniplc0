@@ -71,6 +71,7 @@ namespace miniplc0 {
 		void addVariable(const Token&);
 		void addConstant(const Token&);
 		void addUninitializedVariable(const Token&);
+		void initVariable(const std::string&);
 		// 是否被声明过
 		bool isDeclared(const std::string&);
 		// 是否是未初始化的变量

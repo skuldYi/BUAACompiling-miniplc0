@@ -4,16 +4,6 @@
 #include <sstream>
 
 namespace miniplc0 {
-    std::optional<int> strToInt32(std::string s) {
-        int i;
-        try {
-            i = std::stoi(s);
-        } catch (std::out_of_range& e) {
-            return std::optional<int>();
-        }
-        return i;
-    }
-
     TokenType idType (const std::string& s) {
         if (s == "begin")
             return TokenType::BEGIN;
@@ -27,6 +17,16 @@ namespace miniplc0 {
             return TokenType::PRINT;
 
         return TokenType::IDENTIFIER;
+    }
+
+    std::optional<int32_t> strToInt(const std::string& s) {
+        int32_t i;
+        try {
+            i = std::stoi(s);
+        } catch (std::out_of_range& e) {
+            return {};
+        }
+        return i;
     }
 
 	std::pair<std::optional<Token>, std::optional<CompilationError>> Tokenizer::NextToken() {
@@ -153,17 +153,17 @@ namespace miniplc0 {
 					        std::optional<Token>(),
 					        std::make_optional<CompilationError>(pos, ErrInvalidIdentifier));
 				} else {
-				// 如果读到的字符不是上述情况之一，则回退读到的字符，并解析已经读到的字符串为整数
-				//     解析成功则返回无符号整数类型的token，否则返回编译错误
+				// 如果读到的字符不是上述情况之一，则回退读到的字符，将字符串解析为整数
 					unreadLast();
-				    auto integer = miniplc0::strToInt32(ss.str());
-				    if (integer.has_value()) {
+					auto integer = strToInt(ss.str());
+					if (integer.has_value())
                         return std::make_pair(
-							std::make_optional<Token>(TokenType::UNSIGNED_INTEGER, integer.value(), pos, currentPos()),
-							std::optional<CompilationError>());
-				    } else {
-						return std::make_pair(std::optional<Token>(), std::make_optional<CompilationError>(pos, ErrIntegerOverflow));
-					}
+                                std::make_optional<Token>(TokenType::UNSIGNED_INTEGER, integer.value(), pos, currentPos()),
+                                std::optional<CompilationError>());
+					else
+                        return std::make_pair(
+                                std::optional<Token>(),
+                                std::make_optional<CompilationError>(pos, ErrIntegerOverflow));
 				}
 				break;
 			}
