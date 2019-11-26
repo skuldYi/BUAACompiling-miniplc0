@@ -205,7 +205,7 @@ namespace miniplc0 {
 		// 注意以下均为常表达式：+1 -1 1
 		auto next = nextToken();
 		if (!next.has_value())
-            return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrConstantNeedValue);
+            return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrIncompleteExpression);
 
         int32_t sign = 1;
         if (next.value().GetType() == TokenType::MINUS_SIGN) {
@@ -219,7 +219,7 @@ namespace miniplc0 {
             return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrIncompleteExpression);
 
         // 无符号整数字面量的值必须在[0, 2^{31}-1]以内，不会溢出
-        out = std::any_cast<int32_t>(next.value()) * sign;
+        out = std::any_cast<int32_t>(next.value().GetValue()) * sign;
 		return {};
 	}
 
@@ -377,6 +377,10 @@ namespace miniplc0 {
 		std::optional<CompilationError> err;
 		switch (next.value().GetType()) {
             case TokenType::IDENTIFIER:
+                // 未定义的变量不能参与表达式的运算
+                if (!isDeclared(next.value().GetValueString()))
+                    return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrNotDeclared);
+
                 // 未初始化的变量不能参与表达式的运算
                 if (isUninitializedVariable(next.value().GetValueString()))
                     return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrNotInitialized);
